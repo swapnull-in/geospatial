@@ -27,6 +27,17 @@ npm install   # dev types only
 | `npm run phase3` | **Quadtree** — an adaptive spatial index with range-query pruning | proximity |
 | `npm run phase4` | **Expanding-ring kNN** on a grid — the "nearest drivers" query + termination | proximity |
 | `npm run phase5` | **Geofencing** — point-in-polygon (ray casting), containment at scale | containment |
+| `npm run phase6` | **S2 / Hilbert** — Hilbert vs Z-order locality, hierarchical cells, region cover | index |
+| `npm run phase7` | **R-tree** — MBR pruning for polygons/extents; the PostGIS point-in-polygon path | containment |
+| `npm run phase8` | **Write-path** — the 750k-pings/sec firehose, in-memory index, TTL, LWW, backpressure | ingestion |
+| `npm run phase9` | **Routing** — Dijkstra → A* → Contraction Hierarchies (settled-node counts, same cost) | routing |
+| `npm run phase10` | **Dispatch** — greedy vs batched min-cost matching + the atomic driver-claim | matching |
+| `npm run phase11` | **At scale** — scatter-gather, tail/deadline, hot cells, retrieve→rank, surge heatmap | scale |
+
+> **Phases 6–11 fold in the Staff-level depth** the module is built around — the
+> three pillars are **index → routing → matching**, and the interview is won in the
+> seams (the write-path firehose, hot cells, the atomic claim). Phases 1–5 build
+> the index; 6–11 build everything around it. All dependency-free and deterministic.
 
 ## What each phase proves (the money quotes)
 
@@ -39,6 +50,34 @@ npm install   # dev types only
   must be closer than any unscanned ring before it's safe to terminate.
 - **Phase 5** — a point visually "in the middle" of an L-shaped zone is correctly
   **outside** (it's in the notch) — the non-convex case a radius check gets wrong.
+- **Phase 6** — walking a 16×16 grid, the Z-order curve makes **127 long jumps**
+  (worst 16 cells) where the "Z" snaps back; the **Hilbert** curve makes **0** —
+  its consecutive cells are always edge-adjacent, so S2's ranges are tighter.
+- **Phase 8** — of 96 pings, **80%** are cheap in-place overwrites and ~20% are
+  cell-crossings (remove+add); a silent driver **ages out** via TTL; backpressure
+  widens the interval to halve the write rate.
+- **Phase 9** — the same query settles **Dijkstra > A\* > CH** nodes for an
+  *identical* path cost — CH does the heavy work once offline (shortcuts).
+- **Phase 10** — on one batch, **batched min-cost** matching beats **greedy**
+  nearest on total rider wait *and* dissolves the double-assignment race; the
+  atomic claim (`available → offered` CAS) lets exactly one writer win.
+
+## Interactive Geo Lab
+
+Every phase is also a live, **drawn** instrument in the browser — drag a query
+across an SF map and watch brute-force kNN, straddle a geohash cell edge to see
+the boundary miss, prune a quadtree, compare the Hilbert and Z-order curves,
+crash-and-rebuild the write-path index, race Dijkstra against Contraction
+Hierarchies, and match a batch of riders without a race.
+
+```bash
+npm run web        # serves web/index.html at http://localhost:8080 (no deps)
+```
+
+One self-contained static page (SVG visuals, self-hosted fonts), grouped by tier
+and deep-linkable. To host it on **Cloudflare Pages**: connect this repo in the
+dashboard with build output `web` (auto-deploys on push), or run
+`npx wrangler login` then `npm run deploy`.
 
 ## The index picker (from the notes)
 
@@ -59,6 +98,14 @@ src/
   phase3/  quadtree + range pruning
   phase4/  in-memory grid + expanding-ring kNN
   phase5/  geofencing (point-in-polygon)
+  phase6/  S2 / Hilbert curve + hierarchical cells + region cover
+  phase7/  R-tree (MBR pruning for polygons)
+  phase8/  real-time write-path (in-memory index, TTL, LWW, backpressure)
+  phase9/  routing — Dijkstra / A* / Contraction Hierarchies
+  phase10/ dispatch — greedy vs batched min-cost matching + atomic claim
+  phase11/ proximity at scale — scatter-gather, hot cells, surge
+web/
+  index.html  ·  serve.mjs   (the interactive Geo Lab — npm run web)
 ```
 
 ## License

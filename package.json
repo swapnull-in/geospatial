@@ -10,6 +10,14 @@
     "phase3": "node src/phase3/quadtree.ts",
     "phase4": "node src/phase4/expanding-ring.ts",
     "phase5": "node src/phase5/geofence.ts",
+    "phase6": "node src/phase6/s2-hilbert.ts",
+    "phase7": "node src/phase7/rtree.ts",
+    "phase8": "node src/phase8/write-path.ts",
+    "phase9": "node src/phase9/routing.ts",
+    "phase10": "node src/phase10/dispatch.ts",
+    "phase11": "node src/phase11/scale.ts",
+    "web": "node web/serve.mjs",
+    "deploy": "npx wrangler pages deploy web --project-name geospatial",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": { "typescript": "^5.7.0", "@types/node": "^22.10.0" }

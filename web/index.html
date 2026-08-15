@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Geospatial — Geo Lab</title>
+<meta name="description" content="An interactive lab for geospatial systems: haversine kNN, geohash, quadtree, expanding-ring search, geofencing, S2/Hilbert curves, R-trees, the Uber write-path, routing (Dijkstra/A*/CH), and dispatch matching." />
+<meta name="theme-color" content="#faf9f6" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#0d0d13" media="(prefers-color-scheme: dark)" />
+<link rel="preload" href="fonts/space-grotesk-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="fonts/ibm-plex-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+<style>
+  @font-face { font-family:"Space Grotesk"; font-style:normal; font-weight:500; font-display:swap; src:url(fonts/space-grotesk-latin-500-normal.woff2) format("woff2"); }
+  @font-face { font-family:"Space Grotesk"; font-style:normal; font-weight:600; font-display:swap; src:url(fonts/space-grotesk-latin-600-normal.woff2) format("woff2"); }
+  @font-face { font-family:"Space Grotesk"; font-style:normal; font-weight:700; font-display:swap; src:url(fonts/space-grotesk-latin-700-normal.woff2) format("woff2"); }
+  @font-face { font-family:"IBM Plex Sans"; font-style:normal; font-weight:400; font-display:swap; src:url(fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2"); }
+  @font-face { font-family:"IBM Plex Sans"; font-style:normal; font-weight:500; font-display:swap; src:url(fonts/ibm-plex-sans-latin-500-normal.woff2) format("woff2"); }
+  @font-face { font-family:"IBM Plex Sans"; font-style:normal; font-weight:600; font-display:swap; src:url(fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2"); }
+  @font-face { font-family:"IBM Plex Mono"; font-style:normal; font-weight:400; font-display:swap; src:url(fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2"); }
+  @font-face { font-family:"IBM Plex Mono"; font-style:normal; font-weight:500; font-display:swap; src:url(fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2"); }
+  :root {
+    --bg:#faf9f6; --panel:#ffffff; --panel-2:#f4f2ec; --sidebar-bg:#f4f2ec; --hover:#ebe9e1;
+    --ink:#191a20; --muted:#6c6d78; --line:#e7e3da;
+    --accent:#0e7c66; --accent-soft:#e0f0eb; --amber:#b96608; --amber-soft:#fbeed6;
+    --good:#0f9d6a; --good-soft:#e0f2ea; --warn:#b96608; --warn-soft:#fbeed6; --bad:#dd4650; --bad-soft:#fbe4e6; --info:#2f6db0;
+    --map:#eef1ec; --grid:#d7dbd2;
+    --shadow:0 1px 2px rgba(24,20,40,.04), 0 10px 30px -16px rgba(24,20,40,.18);
+    --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans:"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --display:"Space Grotesk", var(--sans);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0d0d13; --panel:#16161e; --panel-2:#1d1d27; --sidebar-bg:#0a0a10; --hover:#20202c;
+      --ink:#ecebf2; --muted:#9698a6; --line:#282833;
+      --accent:#3fd6b0; --accent-soft:#0f2620; --amber:#f0b45a; --amber-soft:#2a2216;
+      --good:#40d98c; --good-soft:#12261e; --warn:#f0b45a; --warn-soft:#2a2216; --bad:#ff6b72; --bad-soft:#2a141a; --info:#6ea8e0;
+      --map:#12141a; --grid:#282c34;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 14px 34px -18px rgba(0,0,0,.7);
+    }
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; }
+  body { background:var(--bg); color:var(--ink); font-family:var(--sans); line-height:1.55; -webkit-font-smoothing:antialiased; }
+  code, .mono { font-variant-numeric:tabular-nums; }
+  .app { display:flex; align-items:flex-start; min-height:100vh; }
+  .sidebar { position:sticky; top:0; height:100vh; width:272px; flex:none; z-index:40; display:flex; flex-direction:column; overflow-y:auto; padding:20px 14px 16px; background:var(--sidebar-bg); border-right:1px solid var(--line); }
+  .brand { display:flex; align-items:center; gap:11px; padding:4px 10px 16px; margin-bottom:6px; border-bottom:1px solid var(--line); }
+  .glyph { width:32px; height:32px; flex:none; border-radius:9px; background:var(--accent); display:grid; place-items:center; color:#fff; font-family:var(--mono); font-size:17px; box-shadow:0 5px 14px -5px color-mix(in srgb, var(--accent) 60%, transparent); }
+  .brand .wm { display:flex; flex-direction:column; line-height:1.25; }
+  .brand .wm b { font-family:var(--display); font-weight:600; font-size:14.5px; letter-spacing:-.01em; }
+  .brand .wm span { font-family:var(--mono); font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+  nav.nav { display:flex; flex-direction:column; }
+  .nav-group { margin-top:13px; }
+  .nav-group-label { font-family:var(--mono); font-size:9.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); padding:0 11px 6px; }
+  .nav-item { display:flex; align-items:center; gap:11px; width:100%; text-align:left; cursor:pointer; background:none; border:none; font-family:var(--sans); font-size:13.5px; color:var(--muted); padding:7px 11px; border-radius:8px; transition:.12s; line-height:1.3; }
+  .nav-item .n { font-family:var(--mono); font-size:11px; color:color-mix(in srgb, var(--muted) 75%, transparent); min-width:15px; text-align:right; }
+  .nav-item:hover { background:var(--hover); color:var(--ink); }
+  .nav-item.active { background:var(--accent-soft); color:var(--accent); font-weight:500; }
+  .nav-item.active .n { color:var(--accent); }
+  .side-foot { margin-top:auto; padding:15px 11px 2px; font-family:var(--mono); font-size:11px; line-height:1.7; color:var(--muted); }
+  .side-foot a { color:var(--muted); text-decoration:none; border-bottom:1px solid var(--line); }
+  .side-foot a:hover { color:var(--accent); border-color:var(--accent); }
+  .main { flex:1; min-width:0; padding:42px clamp(24px,4vw,60px) 100px; }
+  .main-inner { max-width:960px; margin:0 auto; }
+  .topbar, .backdrop { display:none; }
+  .hero-eyebrow { font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); margin:0 0 14px; }
+  .hero h1 { font-family:var(--display); font-weight:600; font-size:clamp(31px,4.6vw,47px); margin:0 0 16px; letter-spacing:-.026em; line-height:1.03; max-width:16ch; }
+  .hero h1 em { font-style:normal; color:var(--accent); }
+  .hero p { color:var(--muted); margin:0; max-width:62ch; font-size:16.5px; line-height:1.6; }
+  .hero p strong { color:var(--ink); font-weight:600; }
+  .levers { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px,1fr)); gap:12px; margin:30px 0 4px; }
+  .lever { background:var(--panel); border:1px solid var(--line); border-radius:13px; padding:15px 16px; box-shadow:var(--shadow); }
+  .lever b { font-family:var(--display); font-weight:600; font-size:14px; display:block; margin-bottom:4px; }
+  .lever span { font-size:12.5px; color:var(--muted); line-height:1.5; }
+  .overview-hint { font-size:14.5px; color:var(--muted); margin:24px 0 0; line-height:1.6; max-width:66ch; }
+  .overview-hint b { color:var(--ink); font-weight:600; }
+  section.phase { display:none; }
+  section.phase.active { display:block; animation:fade .22s ease; }
+  @keyframes fade { from { opacity:0; transform:translateY(5px); } to { opacity:1; } }
+  .phase h2 { font-family:var(--display); font-weight:600; font-size:25px; margin:0 0 6px; letter-spacing:-.02em; }
+  .phase .lede { color:var(--muted); margin:0 0 20px; max-width:76ch; font-size:15.5px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:20px 22px; margin-bottom:16px; box-shadow:var(--shadow); }
+  .lab { display:grid; grid-template-columns:236px 1fr; gap:22px; align-items:start; }
+  @media (max-width:760px){ .lab { grid-template-columns:1fr; } }
+  .controls { display:flex; flex-direction:column; gap:11px; }
+  .stage { min-width:0; display:flex; flex-direction:column; gap:14px; }
+  label.fld { display:block; font-family:var(--mono); font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  input[type=range] { width:100%; accent-color:var(--accent); height:4px; }
+  .slabel { display:flex; justify-content:space-between; align-items:baseline; font-family:var(--mono); font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .slabel b { color:var(--ink); font-size:14px; }
+  button.act { font-family:var(--sans); font-size:13px; background:var(--accent); color:#fff; border:none; padding:9px 14px; border-radius:9px; cursor:pointer; font-weight:500; text-align:left; box-shadow:0 4px 12px -5px color-mix(in srgb, var(--accent) 60%, transparent); transition:.14s; }
+  button.act:hover { filter:brightness(1.06); }
+  button.ghost { font-family:var(--sans); font-size:13px; background:var(--panel-2); color:var(--ink); border:1px solid var(--line); padding:8px 12px; border-radius:9px; cursor:pointer; text-align:left; }
+  button.ghost:hover { border-color:var(--accent); }
+  button.ghost.sel { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+  .seg { display:flex; gap:6px; flex-wrap:wrap; } .seg button { flex:1 1 auto; }
+  .toggle { display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--ink); cursor:pointer; user-select:none; }
+  .toggle input { width:16px; height:16px; accent-color:var(--accent); }
+  .nav-item:focus-visible, input:focus-visible, button:focus-visible, a:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .verdict { font-family:var(--mono); font-size:13px; border-radius:9px; padding:11px 13px; border:1px solid var(--line); display:flex; gap:10px; align-items:baseline; background:var(--panel-2); }
+  .verdict .dot { width:9px; height:9px; border-radius:50%; flex:none; translate:0 2px; background:var(--muted); }
+  .verdict.ok { background:var(--good-soft); border-color:color-mix(in srgb,var(--good) 40%,transparent); } .verdict.ok .dot { background:var(--good); }
+  .verdict.bad { background:var(--bad-soft); border-color:color-mix(in srgb,var(--bad) 40%,transparent); } .verdict.bad .dot { background:var(--bad); }
+  .verdict.warn { background:var(--warn-soft); border-color:color-mix(in srgb,var(--warn) 40%,transparent); } .verdict.warn .dot { background:var(--warn); }
+  .proof { font-size:13px; color:var(--muted); border-left:3px solid var(--accent); padding:8px 0 8px 13px; margin-top:2px; background:linear-gradient(90deg, var(--accent-soft), transparent 80%); border-radius:0 8px 8px 0; }
+  .proof b { color:var(--ink); }
+  code { font-family:var(--mono); background:var(--accent-soft); color:var(--accent); padding:1px 5px; border-radius:5px; font-size:.88em; }
+  .big { font-family:var(--mono); font-size:24px; font-variant-numeric:tabular-nums; }
+  .big small { font-size:11px; color:var(--muted); font-family:var(--mono); text-transform:uppercase; letter-spacing:.06em; display:block; }
+  svg.viz { width:100%; height:auto; display:block; background:var(--map); border:1px solid var(--line); border-radius:12px; touch-action:none; }
+  svg.viz text { font-family:var(--mono); }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-family:var(--mono); font-size:11.5px; color:var(--muted); align-items:center; }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; translate:0 1px; }
+  .krow { display:flex; gap:10px; flex-wrap:wrap; }
+  .kcard { flex:1 1 120px; border:1px solid var(--line); border-radius:9px; padding:9px 12px; background:var(--panel-2); }
+  .kcard h4 { margin:0 0 5px; font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:500; }
+  table.cmp { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12.5px; }
+  table.cmp th, table.cmp td { text-align:right; padding:6px 9px; border-bottom:1px solid var(--line); }
+  table.cmp th:first-child, table.cmp td:first-child { text-align:left; }
+  table.cmp th { color:var(--muted); font-weight:500; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; }
+  .log-list { font-family:var(--mono); font-size:12px; line-height:1.7; max-height:150px; overflow:auto; }
+  @media (max-width:880px) {
+    .app { display:block; }
+    .topbar { display:flex; align-items:center; gap:11px; position:sticky; top:0; z-index:30; padding:11px 16px; background:color-mix(in srgb,var(--bg) 88%,transparent); backdrop-filter:saturate(1.5) blur(10px); border-bottom:1px solid var(--line); }
+    .topbar b { font-family:var(--display); font-weight:600; font-size:15.5px; }
+    .hamburger { margin-left:auto; display:grid; place-items:center; width:38px; height:38px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--ink); cursor:pointer; font-family:var(--mono); font-size:17px; }
+    .sidebar { position:fixed; top:0; left:0; height:100dvh; width:286px; transform:translateX(-100%); transition:transform .22s ease; box-shadow:0 0 70px rgba(0,0,0,.28); }
+    .app.nav-open .sidebar { transform:none; }
+    .backdrop { display:block; position:fixed; inset:0; z-index:39; background:rgba(0,0,0,.42); opacity:0; pointer-events:none; transition:opacity .22s; }
+    .app.nav-open .backdrop { opacity:1; pointer-events:auto; }
+    .main { padding:22px 18px 84px; }
+    .lab { grid-template-columns:1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior:auto !important; animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><span class="glyph">⌖</span><span class="wm"><b>Geo Lab</b><span>Geospatial</span></span></div>
+    <nav class="nav" id="nav" aria-label="Lessons"></nav>
+    <div class="side-foot">Every panel is also a runnable <code style="font-size:10px">npm run phaseN</code>.<br /><a href="https://github.com/swapnull-in/geospatial" target="_blank" rel="noopener">View source ↗</a></div>
+  </aside>
+  <div class="backdrop" id="backdrop"></div>
+  <main class="main">
+    <div class="topbar"><span class="glyph">⌖</span><b>Geo Lab</b><button class="hamburger" id="hamburger" aria-label="Toggle navigation">≡</button></div>
+    <div class="main-inner">
+
+    <!-- OVERVIEW -->
+    <section class="phase" data-tab="Overview">
+      <div class="hero">
+        <p class="hero-eyebrow">Geospatial · Geo Lab</p>
+        <h1>Find <em>nearby</em>. Then dispatch.</h1>
+        <p>Every "find nearby / ETA / match" system collapses onto three pillars — a <strong>spatial index</strong>,
+          <strong>routing</strong> on a road graph, and <strong>matching</strong>. This lab draws all three: watch a
+          B-tree fail a radius query, a geohash miss the neighbor across a cell edge, a quadtree prune 99% of points, a
+          firehose of pings stay off the database, and a batch of riders match without a race.</p>
+      </div>
+      <div class="levers">
+        <div class="lever"><b>Spatial indexes</b><span>Haversine, geohash, quadtree, S2/Hilbert, R-tree.</span></div>
+        <div class="lever"><b>Proximity queries</b><span>Expanding-ring kNN, geofencing, scatter-gather at scale.</span></div>
+        <div class="lever"><b>The Uber stack</b><span>The write-path firehose, routing (CH), and dispatch matching.</span></div>
+        <div class="lever"><b>Decide by name</b><span>Geohash by default; S2 for hierarchy; quadtree for skew; R-tree for polygons.</span></div>
+      </div>
+      <p class="overview-hint"><b>Pick a lesson in the sidebar.</b> The one sentence that proves you understand the field:
+        <em>a B-tree can't serve a radius query because no 1-D ordering of 2-D points keeps both axes local — so you index
+        a space-filling-curve key that bakes 2-D proximity into a 1-D sort, and nearby-search becomes a handful of range
+        scans.</em></p>
+    </section>
+
+    <!-- 1 · DISTANCE -->
+    <section class="phase" data-tab="1 · Distance">
+      <h2>Distance &amp; the brute-force baseline</h2>
+      <p class="lede">Proximity starts with measuring distance on a sphere (<strong>Haversine</strong>, not flat
+        Pythagoras) and the naive nearest-K: measure every point, sort, take K. Correct, and <strong>O(n) per
+        query</strong> — fine for 10 points, catastrophic for 10M driver locations. That O(n) is the whole reason spatial
+        indexes exist.</p>
+      <div class="card"><div class="lab">
+        <div class="controls">
+          <div><div class="slabel"><span>k nearest</span><b id="d-kval">3</b></div><input type="range" id="d-k" min="1" max="6" value="3" /></div>
+          <p style="font-size:12.5px;color:var(--muted);margin:0">Drag the <b style="color:var(--accent)">◆ query</b> around the San Francisco map.</p>
+          <div class="verdict ok" id="d-verdict"><span class="dot"></span><span id="d-vtext">—</span></div>
+        </div>
+        <div class="stage">
+          <svg class="viz" id="d-svg" viewBox="0 0 460 300" role="img" aria-label="San Francisco landmark map"></svg>
+          <p class="proof"><b>The proof:</b> the brute force computed Haversine to all <b>10</b> landmarks, sorted, and
+            took the nearest <span id="d-k2">3</span>. At 10 points that's instant; at fleet scale you'd do this millions
+            of times a second — so Phases 2–4 build indexes that touch a handful of candidates instead of all n.</p>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- 2 · GEOHASH -->
+    <section class="phase" data-tab="2 · Geohash">
+      <h2>Geohash — 2-D into a 1-D key, and the boundary trap</h2>
+      <p class="lede">A geohash interleaves lat/lng bits into a string: a shared prefix means a shared cell, so "find
+        nearby" becomes a prefix range scan any KV store does. The trap: two points meters apart can straddle a cell edge
+        and share <em>no</em> prefix — a single-cell scan <strong>misses the nearest</strong>. The fix is the
+        <strong>9-cell</strong> (query cell + 8 neighbors) scan.</p>
+      <div class="card"><div class="lab">
+        <div class="controls">
+          <label class="toggle"><input type="checkbox" id="g-nine" /> Scan the 8 neighbor cells (3×3)</label>
+          <p style="font-size:12.5px;color:var(--muted);margin:0">Drag the <b style="color:var(--accent)">◆ query</b>; the two pins sit ~24 m apart across a cell edge.</p>
+          <div class="verdict" id="g-verdict"><span class="dot"></span><span id="g-vtext">—</span></div>
+        </div>
+        <div class="stage">
+          <svg class="viz" id="g-svg" viewBox="0 0 460 300"></svg>
+          <div class="legend"><span><i style="background:var(--accent)"></i>query cell</span><span><i style="background:var(--amber)"></i>neighbor cells</span><span><i style="background:var(--bad)"></i>missed pin</span><span><i style="background:var(--good)"></i>found pin</span></div>
+          <p class="proof"><b>The proof:</b> the two pins are ~24 m apart but land in different cells. A single-cell scan
+            finds one and <b>silently drops</b> the other — the #1 geohash bug. Turn on the 3×3 neighbor fan-out and both
+            are found; then you re-rank candidates by true Haversine. Precision 6 (~1.2 km cells) is the find-nearby
+            workhorse.</p>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- 3 · QUADTREE -->
+    <section class="phase" data-tab="3 · Quadtree">
+      <h2>Quadtree — an index that prunes</h2>
+      <p class="lede">A geohash uses one fixed cell size everywhere. A <strong>quadtree</strong> adapts: a node holds up
+        to <em>capacity</em> points and subdivides into four quadrants only where dense. A range query descends only into
+        quadrants that <strong>intersect</strong> the query box — whole subtrees that can't match are skipped without
+        looking at their points.</p>
+      <div class="card"><div class="lab">
+        <div class="controls">
+          <div><div class="slabel"><span>query box size</span><b id="q-sval">18%</b></div><input type="range" id="q-size" min="8" max="40" value="18" /></div>
+          <label class="toggle"><input type="checkbox" id="q-grid" checked /> Show quadtree subdivision</label>
+          <p style="font-size:12.5px;color:var(--muted);margin:0">Drag the box over the dense corner vs the sparse edge.</p>
+          <div class="verdict ok" id="q-verdict"><span class="dot"></span><span id="q-vtext">—</span></div>
+        </div>
+        <div class="stage">
+          <svg class="viz" id="q-svg" viewBox="0 0 400 300"></svg>
+          <p class="proof"><b>The proof:</b> the tree subdivides deeply where points cluster and stays coarse where
+            they're sparse — self-balancing to density. The range query examines only the points in intersecting leaves
+            (<b id="q-ex">—</b>), pruning the rest. That's O(n) → ~O(log n + hits): the entire reason to use an index.</p>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- 6 · S2 / HILBERT -->
+    <section class="phase" data-tab="6 · S2 / Hilbert">
+      <h2>S2 &amp; the Hilbert curve — better locality, hierarchy, region cover</h2>
+      <p class="lede">Geohash walks the grid on a <strong>Z-order</strong> curve, which occasionally makes a long jump
+        where the "Z" snaps back. <strong>S2</strong> uses the <strong>Hilbert</strong> curve, which never jumps —
+        consecutive cells are always edge-adjacent → tighter ranges, fewer false candidates — plus hierarchical cells
+        (parent = a bit-truncation) and <strong>region cover</strong>.</p>
+      <div class="card"><div class="lab">
+        <div class="controls">
+          <div><label class="fld">space-filling curve</label><div class="seg"><button class="ghost sel" id="s-hil">Hilbert (S2)</button><button class="ghost" id="s-z">Z-order (geohash)</button></div></div>
+          <label class="toggle"><input type="checkbox" id="s-cover" /> Show region cover of a circle</label>
+          <div class="verdict ok" id="s-verdict"><span class="dot"></span><span id="s-vtext">—</span></div>
+        </div>
+        <div class="stage">
+          <svg class="viz" id="s-svg" viewBox="0 0 320 320" style="max-width:360px;margin:0 auto"></svg>
+          <div class="legend"><span><i style="background:var(--accent)"></i>curve path</span><span><i style="background:var(--bad)"></i>long jump</span><span><i style="background:var(--amber)"></i>region cover</span></div>
+          <p class="proof"><b>The proof:</b> the Hilbert curve's longest step is <b>1 cell</b> (always edge-adjacent), so
+            a range of 1-D keys maps to a compact 2-D blob. The Z-order curve makes <b id="s-jumps">—</b> long jumps back
+            across a quadrant — two cells adjacent in key space can be far apart on the map, which is why S2's locality
+            beats geohash. Parent cells are a bit-truncation (roll dispatch cells up to surge cells for free).</p>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- 7 · R-TREE -->
+    <section class="phase" data-tab="7 · R-tree">
+      <h2>R-tree — indexing polygons, not points</h2>
+      <p class="lede">Curve methods index <em>points</em>. An <strong>R-tree</strong> indexes <em>extents</em> by their
+        minimum bounding rectangle (MBR) — the index behind PostGIS. "Which delivery zone contains this point?" descends
+        only nodes whose MBR contains the point, then runs the exact ray-cast on the few candidates. The MBR is a cheap
+        <strong>filter</strong>, never the answer.</p>
+      <div class="card"><div class="lab">
+        <div class="controls">
+          <label class="toggle"><input type="checkbox" id="r-mbr" checked /> Show bounding rectangles (MBRs)</label>
+          <p style="font-size:12.5px;color:var(--muted);margin:0">Drag the <b style="color:var(--accent)">◆ point</b>; try the notch of the L-shaped zone.</p>
+          <div class="verdict" id="r-verdict"><span class="dot"></span><span id="r-vtext">—</span></div>
+        </div>
+        <div class="stage">
+          <svg class="viz" id="r-svg" viewBox="0 0 400 300"></svg>
+          <p class="proof"><b>The proof:</b> the query tests only the polygons whose MBR contains the point
+            (<b id="r-ex">—</b> of <span id="r-tot">—</span>) — the rest are pruned. And a point can sit <em>inside</em> a
+            polygon's MBR but <em>outside</em> the polygon (the concave notch): the MBR filter passes, the exact ray-cast
+            correctly rejects. Cheap filter → exact refine.</p>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- 4 · RING kNN -->
+    <section class="phase" data-tab="4 · Ring kNN">
+      <h2>Expanding-ring kNN — "the nearest 5 drivers"</h2>
+      <p class="lede">The dispatch query on an in-memory grid: look in your own cell, then expand outward one ring at a
+        time. The subtle part is <strong>termination</strong> — once you have K you can't stop, because a point in the
+        next ring might be closer than your current Kth. You may only stop when the Kth distance ≤ the nearest possible
+        point in any unscanned ring.</p>
+      <div class="card"><div class="lab">
+        <div class="controls">
+          <button class="act" id="rk-step">▶ Expand one ring</button>
+          <button class="ghost" id="rk-auto">⏩ Run to safe stop</button>
+          <button class="ghost" id="rk-reset">↺ Reset</button>
+          <div class="verdict" id="rk-verdict"><span class="dot"></span><span id="rk-vtext">—</span></div>
+        </div>
+        <div class="stage">
+          <svg class="viz" id="rk-svg" viewBox="0 0 320 320" style="max-width:360px;margin:0 auto"></svg>
+          <p class="proof"><b>The proof:</b> after collecting 5 candidates the search keeps going one ring — because the
+            <b>Kth-nearest</b> is still farther than the closest edge of the next unscanned ring, so a nearer driver could
+            hide there. It stops the instant that stops being true. Terminating too early returns a wrong "nearest 5";
+            this is the whole gate.</p>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- 5 · GEOFENCE -->
+    <section class="phase" data-tab="5 · Geofence">
+      <h2>Geofencing — point-in-polygon (containment, not proximity)</h2>
+      <p class="lede">The other half of geo. Proximity asks "what's near me"; <strong>containment</strong> asks "am I
+        inside this zone" — a delivery area, surge region, "you've arrived" trigger. The primitive is
+        <strong>ray casting</strong>: shoot a ray and count edge crossings — <strong>odd = inside, even = outside</strong>.
+        A radius check gets the non-convex case wrong.</p>
+      <div class="card"><div class="lab">
+        <div class="controls">
+          <label class="toggle"><input type="checkbox" id="f-ray" checked /> Show the ray &amp; crossings</label>
+          <p style="font-size:12.5px;color:var(--muted);margin:0">Drag the <b style="color:var(--accent)">◆ point</b> into the notch of the L-shaped zone.</p>
+          <div class="verdict" id="f-verdict"><span class="dot"></span><span id="f-vtext">—</span></div>
+        </div>
+        <div class="stage">
+          <svg class="viz" id="f-svg" viewBox="0 0 400 300"></svg>
+          <p class="proof"><b>The proof:</b> a point that looks like it's "in the middle" of the L-shape is actually in
+            the notch — <b>outside</b> the zone. The ray from it crosses the border an <em>even</em> number of times. A
+            naive center+radius check would wrongly include it; ray casting handles arbitrary non-convex polygons. At
+            scale: R-tree to narrow (Phase 7), ray-cast to confirm.</p>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- 11 · At scale -->
+    <section class="phase" data-tab="11 · At Scale">
+      <h2>Proximity at scale — scatter-gather, hot cells, surge</h2>
+      <p class="lede">The index is only the retrieval layer; the interview is won in the seams. A nearby query is a
+        <strong>scatter-gather</strong> over the cell + neighbors whose p99 is the <em>worst</em> shard's — hedge or
+        deadline it. The <strong>hot cell</strong> (Times Square) is a hot key. Ranking is <strong>retrieve→rank</strong>,
+        not distance-sort. <strong>Surge</strong> is a per-cell demand heatmap.</p>
+      <div class="card"><div class="lab">
+        <div class="controls">
+          <label class="toggle"><input type="checkbox" id="sc-deadline" /> Return partial results on a 50 ms deadline</label>
+          <label class="toggle"><input type="checkbox" id="sc-blend" checked /> Rank by blended score (not distance only)</label>
+          <button class="act" id="sc-run">▶ Run nearby query</button>
+          <div class="verdict" id="sc-verdict"><span class="dot"></span><span id="sc-vtext">—</span></div>
+        </div>
+        <div class="stage">
+          <div class="krow">
+            <div class="kcard"><h4>fan-out p99</h4><div class="big" id="sc-p99" style="font-size:20px">—</div></div>
+            <div class="kcard"><h4>hot-cell cache</h4><div class="big" id="sc-cache" style="font-size:20px">—</div></div>
+          </div>
+          <svg class="viz" id="sc-svg" viewBox="0 0 400 150" style="background:transparent;border:none"></svg>
+          <div class="cols" style="display:flex;gap:10px;flex-wrap:wrap">
+            <div class="kcard" style="flex:1 1 160px"><h4>ranking</h4><div id="sc-rank" style="font-family:var(--mono);font-size:12px"></div></div>
+            <div class="kcard" style="flex:1 1 160px"><h4>surge heatmap (demand ÷ supply)</h4><div id="sc-surge" style="font-family:var(--mono);font-size:12px"></div></div>
+          </div>
+          <p class="proof"><b>The proof:</b> the query fans out to 9 cells; its latency is the slowest shard's — a
+            <b>50 ms deadline</b> returns what's back and drops the straggler (proximity is approximate anyway). One hot
+            cell holds ~100× the entities, so you cache its candidate set (a short TTL gives a high hit ratio) and
+            sub-shard it. Ranking blends distance with rating/popularity — a 4.8★ at 800 m beats a 3.0★ next door.</p>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- 8 · WRITE-PATH -->
+    <section class="phase" data-tab="8 · Write-path">
+      <h2>The write-path — a firehose that never touches the database</h2>
+      <p class="lede">~3M drivers pinging every 4 s ≈ <strong>750k writes/sec</strong>. You cannot put that on Postgres.
+        Location is eventually consistent, lossy, and disposable — it lives in an <strong>in-memory</strong>,
+        city-partitioned, TTL'd geo-index (last-write-wins), rebuildable from the stream. The DB persists <em>trips</em>,
+        not every breadcrumb.</p>
+      <div class="card"><div class="lab">
+        <div class="controls">
+          <button class="act" id="w-tick">▶ Tick — drivers ping</button>
+          <button class="ghost" id="w-silent">🔇 One driver goes silent</button>
+          <label class="toggle"><input type="checkbox" id="w-bp" /> Backpressure: ping every 8 s</label>
+          <button class="ghost" id="w-reset">↺ Reset</button>
+          <div class="verdict" id="w-verdict"><span class="dot"></span><span id="w-vtext">—</span></div>
+        </div>
+        <div class="stage">
+          <div class="krow">
+            <div class="kcard"><h4>in-place updates</h4><div class="big" id="w-inplace" style="color:var(--good)">0</div></div>
+            <div class="kcard"><h4>cell crossings</h4><div class="big" id="w-cross" style="color:var(--amber)">0</div></div>
+            <div class="kcard"><h4>writes / sec (model)</h4><div class="big" id="w-rate" style="font-size:19px">750k</div></div>
+          </div>
+          <svg class="viz" id="w-svg" viewBox="0 0 400 200" style="max-width:420px"></svg>
+          <div class="log-list" id="w-log">—</div>
+          <p class="proof"><b>The proof:</b> most pings <em>don't</em> cross a cell → a cheap O(1) overwrite-in-place; the
+            minority that cross do a remove-old + add-new (Redis <code>ZREM</code>+<code>GEOADD</code>). A driver that goes
+            silent <b>ages out</b> via TTL so it stops being matched (no ghost drivers). Under load, widening the ping
+            interval halves the write rate — a named degradation lever. The index is derived state; rebuild it by
+            replaying the stream.</p>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- 9 · ROUTING -->
+    <section class="phase" data-tab="9 · Routing">
+      <h2>Routing — Dijkstra → A* → Contraction Hierarchies</h2>
+      <p class="lede">A road network is a weighted graph. <strong>Dijkstra</strong> explores a circle in all directions.
+        <strong>A*</strong> adds a straight-line heuristic to bias toward the goal (an ellipse) — same answer, fewer
+        nodes. <strong>Contraction Hierarchies</strong> precompute shortcut edges offline so a query touches a fraction of
+        the nodes — sub-millisecond continental routing.</p>
+      <div class="card"><div class="lab">
+        <div class="controls">
+          <div><label class="fld">algorithm</label><div class="seg"><button class="ghost sel" id="rt-dij">Dijkstra</button><button class="ghost" id="rt-astar">A*</button><button class="ghost" id="rt-ch">Contraction H.</button></div></div>
+          <div class="verdict ok" id="rt-verdict"><span class="dot"></span><span id="rt-vtext">—</span></div>
+          <table class="cmp"><thead><tr><th>method</th><th>settled</th><th>cost</th></tr></thead><tbody id="rt-tbody"></tbody></table>
+        </div>
+        <div class="stage">
+          <svg class="viz" id="rt-svg" viewBox="0 0 320 320" style="max-width:360px;margin:0 auto"></svg>
+          <div class="legend"><span><i style="background:var(--accent)"></i>settled node</span><span><i style="background:var(--amber)"></i>shortest path</span><span><i style="background:var(--bad)"></i>CH shortcut</span></div>
+          <p class="proof"><b>The proof:</b> all three return the <em>same</em> shortest-path cost — but the nodes
+            <b>settled</b> shrink Dijkstra → A* → CH. Naive Dijkstra re-explores the whole graph every query; CH does the
+            heavy work once offline (adding shortcuts) so each query is a bidirectional upward search over a fraction of
+            the graph. CRP then splits topology from the traffic metric so a live-traffic update is a cheap
+            re-customization, not a full re-preprocess.</p>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- 10 · DISPATCH -->
+    <section class="phase" data-tab="10 · Dispatch">
+      <h2>Dispatch — batched matching, not greedy nearest</h2>
+      <p class="lede">Assigning each request its closest driver (<strong>greedy</strong>) is wrong at the margin: it races
+        (two requests grab one driver) and is globally worse (a driver taken greedily was someone else's only option).
+        The Staff answer is <strong>batched global min-cost matching</strong> over a short window, committed with an
+        <strong>atomic driver-claim</strong>.</p>
+      <div class="card"><div class="lab">
+        <div class="controls">
+          <div><label class="fld">strategy</label><div class="seg"><button class="ghost sel" id="m-greedy">Greedy nearest</button><button class="ghost" id="m-batch">Batched min-cost</button></div></div>
+          <button class="act" id="m-run">▶ Match the batch</button>
+          <button class="ghost" id="m-shuffle">⇄ New batch</button>
+          <div class="verdict" id="m-verdict"><span class="dot"></span><span id="m-vtext">—</span></div>
+        </div>
+        <div class="stage">
+          <svg class="viz" id="m-svg" viewBox="0 0 400 300"></svg>
+          <div class="krow">
+            <div class="kcard"><h4>avg rider wait</h4><div class="big" id="m-wait" style="font-size:20px">—</div></div>
+            <div class="kcard"><h4>unmatched</h4><div class="big" id="m-unmatched" style="font-size:20px">—</div></div>
+          </div>
+          <p class="proof"><b>The proof:</b> on the same batch, greedy leaves riders waiting longer (and can strand one)
+            because it commits locally-optimal choices; the batched min-cost assignment minimizes <em>total</em> wait and
+            a single writer decides the whole batch — dissolving the double-assignment race for free. Each pairing is then
+            committed with an atomic conditional-write claim (first writer wins, the loser re-dispatches) plus an
+            accept-timeout.</p>
+        </div>
+      </div></div>
+    </section>
+
+    <div class="side-foot" style="margin-top:24px; padding-top:22px; border-top:1px solid var(--line); text-align:center">Browser port of the <code style="font-size:10px">src/phase*</code> scripts · same mechanics · MIT</div>
+    </div><!-- /main-inner -->
+  </main>
+</div>
+
+<script>
+const sections = [...document.querySelectorAll('section.phase')];
+const navEl = document.getElementById('nav'), appEl = document.getElementById('app');
+const tabButtons = [];
+const slug = s => s.dataset.tab.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const closeNav = () => appEl.classList.remove('nav-open');
+const TIER_OF = {
+  'overview':'Overview',
+  '1-distance':'Spatial indexes','2-geohash':'Spatial indexes','3-quadtree':'Spatial indexes','6-s2-hilbert':'Spatial indexes','7-r-tree':'Spatial indexes',
+  '4-ring-knn':'Proximity queries','5-geofence':'Proximity queries','11-at-scale':'Proximity queries',
+  '8-write-path':'The Uber stack','9-routing':'The Uber stack','10-dispatch':'The Uber stack',
+};
+navEl.setAttribute('role','tablist'); navEl.setAttribute('aria-orientation','vertical');
+let curTier=null, groupEl=null;
+sections.forEach((sec,i)=>{ const id=slug(sec), tier=TIER_OF[id]||'More';
+  if(tier!==curTier){ groupEl=document.createElement('div'); groupEl.className='nav-group';
+    const h=document.createElement('div'); h.className='nav-group-label'; h.textContent=tier; groupEl.appendChild(h); navEl.appendChild(groupEl); curTier=tier; }
+  sec.id='panel-'+id; sec.setAttribute('role','tabpanel');
+  const parts=sec.dataset.tab.split('·').map(s=>s.trim());
+  const b=document.createElement('button'); b.className='nav-item'; b.setAttribute('role','tab');
+  b.innerHTML=`<span class="n">${parts.length>1?parts[0]:''}</span><span class="t">${parts.length>1?parts[1]:parts[0]}</span>`;
+  b.onclick=()=>{ activate(i,true); closeNav(); };
+  b.onkeydown=(e)=>{ const d=e.key==='ArrowDown'?1:e.key==='ArrowUp'?-1:e.key==='Home'?'first':e.key==='End'?'last':0; if(!d)return; e.preventDefault();
+    const n=d==='first'?0:d==='last'?sections.length-1:(i+d+sections.length)%sections.length; activate(n,true); tabButtons[n].focus(); };
+  tabButtons.push(b); groupEl.appendChild(b); });
+function activate(i,push){ sections.forEach((s,j)=>s.classList.toggle('active',i===j));
+  tabButtons.forEach((b,j)=>{ const on=i===j; b.classList.toggle('active',on); b.setAttribute('aria-selected',String(on)); b.tabIndex=on?0:-1; });
+  if(push && location.hash.slice(1)!==slug(sections[i])) history.replaceState(null,'','#'+slug(sections[i]));
+  window.scrollTo({ top:0, behavior: reduceMotion?'auto':'smooth' });
+  if(PANELS[i] && !PANELS[i].done){ PANELS[i](); PANELS[i].done=true; } }
+function fromHash(){ const i=sections.findIndex(s=>slug(s)===location.hash.slice(1)); activate(i>=0?i:0,false); }
+addEventListener('hashchange',fromHash);
+document.getElementById('hamburger')?.addEventListener('click',()=>appEl.classList.toggle('nav-open'));
+document.getElementById('backdrop')?.addEventListener('click',closeNav);
+addEventListener('keydown',e=>{ if(e.key==='Escape') closeNav(); });
+
+const $=(s,r=document)=>r.querySelector(s), NS='http://www.w3.org/2000/svg';
+function S(tag, attrs={}, kids=[]){ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k, attrs[k]); for(const c of [].concat(kids)) if(c) e.appendChild(c); return e; }
+function clear(el){ while(el.firstChild) el.removeChild(el.firstChild); return el; }
+function verdict(sel,tsel,kind,text){ const v=$(sel); v.className='verdict '+kind; $(tsel).innerHTML=text; }
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function haversineKm(a,b){ const R=6371, tr=d=>d*Math.PI/180; const dLat=tr(b.lat-a.lat), dLng=tr(b.lng-a.lng), la1=tr(a.lat), la2=tr(b.lat);
+  const h=Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+// Pointer→svg-user-space
+function svgPt(svg, ev){ const r=svg.getBoundingClientRect(); const vb=svg.viewBox.baseVal;
+  return { x:(ev.clientX-r.left)/r.width*vb.width, y:(ev.clientY-r.top)/r.height*vb.height }; }
+function draggable(svg, onMove){ let on=false; const go=ev=>{ ev.preventDefault(); onMove(svgPt(svg,ev.touches?ev.touches[0]:ev)); };
+  svg.addEventListener('pointerdown',e=>{ on=true; svg.setPointerCapture?.(e.pointerId); go(e); });
+  svg.addEventListener('pointermove',e=>{ if(on) go(e); });
+  addEventListener('pointerup',()=>on=false); }
+
+const PANELS = {}; // index → init fn
+const idxOf = tab => sections.findIndex(s=>s.dataset.tab===tab);
+
+/* ══ SF projection for map panels ══ */
+const SF = [
+  { name:"Ferry Building", lat:37.7955, lng:-122.3937 },{ name:"Coit Tower", lat:37.8024, lng:-122.4058 },
+  { name:"Union Square", lat:37.7880, lng:-122.4074 },{ name:"Chinatown Gate", lat:37.7908, lng:-122.4056 },
+  { name:"Oracle Park", lat:37.7786, lng:-122.3893 },{ name:"Painted Ladies", lat:37.7762, lng:-122.4327 },
+  { name:"Golden Gate Park", lat:37.7694, lng:-122.4862 },{ name:"Twin Peaks", lat:37.7544, lng:-122.4477 },
+  { name:"Fisherman's Wharf", lat:37.8080, lng:-122.4177 },{ name:"Mission Dolores", lat:37.7645, lng:-122.4269 },
+];
+const LNG0=-122.52, LNG1=-122.37, LAT0=37.745, LAT1=37.815, MW=460, MH=300, PAD=26;
+const projX = lng => PAD + (lng-LNG0)/(LNG1-LNG0)*(MW-2*PAD);
+const projY = lat => PAD + (LAT1-lat)/(LAT1-LAT0)*(MH-2*PAD);
+const unX = x => LNG0 + (x-PAD)/(MW-2*PAD)*(LNG1-LNG0);
+const unY = y => LAT1 - (y-PAD)/(MH-2*PAD)*(LAT1-LAT0);
+
+/* ══ 1 · DISTANCE ══ */
+PANELS[idxOf('1 · Distance')] = function(){
+  const svg=$('#d-svg'); let q={lat:37.783,lng:-122.42}, k=3;
+  function render(){
+    clear(svg);
+    for(const p of SF){ const near = SF.map(x=>({x,km:haversineKm(q,x)})).sort((a,b)=>a.km-b.km).slice(0,k).map(o=>o.x.name); }
+    const ranked = SF.map(p=>({p,km:haversineKm(q,p)})).sort((a,b)=>a.km-b.km);
+    const nearSet = new Set(ranked.slice(0,k).map(o=>o.p.name));
+    for(const o of ranked){ if(nearSet.has(o.p.name)) svg.appendChild(S('line',{x1:projX(q.lng),y1:projY(q.lat),x2:projX(o.p.lng),y2:projY(o.p.lat),stroke:'var(--accent)','stroke-width':1.4,'stroke-dasharray':'3 3',opacity:.7})); }
+    for(const p of SF){ const on=nearSet.has(p.name);
+      svg.appendChild(S('circle',{cx:projX(p.lng),cy:projY(p.lat),r:on?6:4,fill:on?'var(--accent)':'var(--muted)',stroke:'var(--panel)','stroke-width':1.5}));
+      svg.appendChild(S('text',{x:projX(p.lng)+8,y:projY(p.lat)+3,'font-size':8.5,fill:'var(--muted)'},[document.createTextNode(p.name)])); }
+    // query marker
+    svg.appendChild(S('path',{d:diamond(projX(q.lng),projY(q.lat),8),fill:'var(--amber)',stroke:'var(--panel)','stroke-width':1.5}));
+    const nearest=ranked[0];
+    verdict('#d-verdict','#d-vtext','ok',`Nearest of ${k}: <b>${nearest.p.name}</b> at <b>${nearest.km.toFixed(2)} km</b>. Scanned all 10.`);
+    $('#d-k2').textContent=k;
+  }
+  const diamond=(x,y,r)=>`M${x} ${y-r} L${x+r} ${y} L${x} ${y+r} L${x-r} ${y} Z`;
+  $('#d-k').oninput=e=>{ k=+e.target.value; $('#d-kval').textContent=k; render(); };
+  draggable(svg, pt=>{ q={lat:Math.max(LAT0,Math.min(LAT1,unY(pt.y))), lng:Math.max(LNG0,Math.min(LNG1,unX(pt.x)))}; render(); });
+  render();
+};
+
+/* ══ 2 · GEOHASH ══ */
+PANELS[idxOf('2 · Geohash')] = function(){
+  const svg=$('#g-svg'); const NX=6, NY=5; const cw=(MW-2*PAD)/NX, ch=(MH-2*PAD)/NY;
+  // two pins ~24m apart across a vertical cell edge (col boundary near center)
+  const edgeLng = LNG0 + 3*(LNG1-LNG0)/NX; // boundary between col2/col3
+  const pinA={name:'driver A',lat:37.783,lng:edgeLng-0.0006}, pinB={name:'driver B',lat:37.783,lng:edgeLng+0.0006};
+  let q={lat:37.783,lng:edgeLng-0.004};
+  const cellOf=p=>({cx:Math.min(NX-1,Math.max(0,Math.floor((p.lng-LNG0)/(LNG1-LNG0)*NX))), cy:Math.min(NY-1,Math.max(0,Math.floor((LAT1-p.lat)/(LAT1-LAT0)*NY)))});
+  const gh=c=>'9q8y'+'0123456789bcdefg'[c.cy*NX+c.cx];
+  function render(){
+    clear(svg); const nine=$('#g-nine').checked; const qc=cellOf(q);
+    for(let x=0;x<NX;x++)for(let y=0;y<NY;y++){ const isQ=x===qc.cx&&y===qc.cy; const isN=nine&&Math.abs(x-qc.cx)<=1&&Math.abs(y-qc.cy)<=1&&!isQ;
+      svg.appendChild(S('rect',{x:PAD+x*cw,y:PAD+y*ch,width:cw,height:ch,fill:isQ?'var(--accent-soft)':isN?'var(--amber-soft)':'transparent',stroke:'var(--grid)','stroke-width':1})); }
+    const scanned=new Set(); const cells=[qc]; if(nine)for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)cells.push({cx:qc.cx+dx,cy:qc.cy+dy});
+    const inScan=p=>cells.some(c=>{const pc=cellOf(p);return pc.cx===c.cx&&pc.cy===c.cy;});
+    for(const pin of [pinA,pinB]){ const found=inScan(pin); const col=found?'var(--good)':'var(--bad)';
+      svg.appendChild(S('circle',{cx:projX(pin.lng),cy:projY(pin.lat),r:5.5,fill:col,stroke:'var(--panel)','stroke-width':1.5}));
+      svg.appendChild(S('text',{x:projX(pin.lng)+8,y:projY(pin.lat)-6,'font-size':8.5,fill:col},[document.createTextNode(gh(cellOf(pin)))])); }
+    svg.appendChild(S('path',{d:`M${projX(q.lng)} ${projY(q.lat)-8} L${projX(q.lng)+8} ${projY(q.lat)} L${projX(q.lng)} ${projY(q.lat)+8} L${projX(q.lng)-8} ${projY(q.lat)} Z`,fill:'var(--accent)',stroke:'var(--panel)','stroke-width':1.5}));
+    const foundCount=[pinA,pinB].filter(inScan).length;
+    if(!nine) verdict('#g-verdict','#g-vtext', foundCount<2?'bad':'warn', foundCount<2?`Single-cell scan of <code>${gh(qc)}</code> found <b>${foundCount} of 2</b> — the pin across the edge is silently dropped.`:`Both pins happen to share this cell — drag the query near the boundary to see the miss.`);
+    else verdict('#g-verdict','#g-vtext','ok',`3×3 neighbor scan (9 cells) found <b>${foundCount} of 2</b> — the boundary pin is recovered. Re-rank by Haversine.`);
+  }
+  $('#g-nine').onchange=render;
+  draggable(svg, pt=>{ q={lat:Math.max(LAT0,Math.min(LAT1,unY(pt.y))), lng:Math.max(LNG0,Math.min(LNG1,unX(pt.x)))}; render(); });
+  render();
+};
+
+/* ══ 3 · QUADTREE ══ */
+PANELS[idxOf('3 · Quadtree')] = function(){
+  const svg=$('#q-svg'), W=400,H=300; const rnd=mulberry32(7);
+  const pts=[]; for(let i=0;i<420;i++){ // dense in top-right corner
+    const dense=rnd()<0.6; const x=dense? 0.62+rnd()*0.34 : rnd(); const y=dense? 0.05+rnd()*0.33 : rnd(); pts.push({x:x*W,y:y*H}); }
+  const CAP=4;
+  function build(x,y,w,h,items,depth){ const node={x,y,w,h,items:[],children:null};
+    if(items.length<=CAP||depth>7){ node.items=items; return node; }
+    const hw=w/2,hh=h/2; const q=[[],[],[],[]];
+    for(const p of items){ const i=(p.x>=x+hw?1:0)+(p.y>=y+hh?2:0); q[i].push(p); }
+    node.children=[build(x,y,hw,hh,q[0],depth+1),build(x+hw,y,hw,hh,q[1],depth+1),build(x,y+hh,hw,hh,q[2],depth+1),build(x+hw,y+hh,hw,hh,q[3],depth+1)];
+    return node; }
+  const root=build(0,0,W,H,pts,0);
+  let box={x:W*0.62,y:H*0.1,w:0.18*W,h:0.18*H};
+  const rectI=(a,b)=>!(b.x>a.x+a.w||b.x+b.w<a.x||b.y>a.y+a.h||b.y+b.h<a.y);
+  const inBox=(p,b)=>p.x>=b.x&&p.x<=b.x+b.w&&p.y>=b.y&&p.y<=b.y+b.h;
+  function drawNode(n){ if($('#q-grid').checked && n.children) svg.appendChild(S('rect',{x:n.x,y:n.y,width:n.w,height:n.h,fill:'none',stroke:'var(--grid)','stroke-width':.6}));
+    if(n.children) n.children.forEach(drawNode); }
+  function render(){ clear(svg); let examined=0, hits=0;
+    drawNode(root);
+    const qb={x:box.x,y:box.y,w:box.w,h:box.h};
+    (function q(n){ if(!rectI(n,qb)) return; if(n.children){ n.children.forEach(q); } else { examined+=n.items.length; for(const p of n.items) if(inBox(p,qb)) hits++; } })(root);
+    for(const p of pts) svg.appendChild(S('circle',{cx:p.x,cy:p.y,r:1.7,fill: inBox(p,qb)?'var(--accent)':'var(--muted)',opacity: inBox(p,qb)?1:.5}));
+    svg.appendChild(S('rect',{x:qb.x,y:qb.y,width:qb.w,height:qb.h,fill:'var(--accent-soft)',opacity:.35,stroke:'var(--accent)','stroke-width':1.5}));
+    const pct=(100*(1-examined/pts.length)).toFixed(1);
+    $('#q-ex').textContent=`${examined} of ${pts.length}`;
+    verdict('#q-verdict','#q-vtext','ok',`Range query examined <b>${examined}</b> of ${pts.length} points (${pct}% pruned), found <b>${hits}</b> inside.`);
+  }
+  $('#q-size').oninput=e=>{ const s=+e.target.value/100; $('#q-sval').textContent=e.target.value+'%'; const cx=box.x+box.w/2, cy=box.y+box.h/2; box.w=s*W; box.h=s*H; box.x=cx-box.w/2; box.y=cy-box.h/2; render(); };
+  $('#q-grid').onchange=render;
+  draggable(svg, pt=>{ box.x=Math.max(0,Math.min(W-box.w,pt.x-box.w/2)); box.y=Math.max(0,Math.min(H-box.h,pt.y-box.h/2)); render(); });
+  render();
+};
+
+/* ══ 6 · S2 / HILBERT ══ */
+PANELS[idxOf('6 · S2 / Hilbert')] = function(){
+  const svg=$('#s-svg'), N=8, S0=320, cell=S0/N; let curve='hil';
+  // Hilbert d2xy
+  function hilbert(n){ const pts=[]; for(let d=0;d<n*n;d++){ let rx,ry,t=d,x=0,y=0; for(let s=1;s<n;s*=2){ rx=1&(t/2); ry=1&(t^rx); // rotate
+    if(ry===0){ if(rx===1){ x=s-1-x; y=s-1-y; } const tmp=x; x=y; y=tmp; } x+=s*rx; y+=s*ry; t=Math.floor(t/4); } pts.push([x,y]); } return pts; }
+  function zorder(n){ const pts=[]; for(let d=0;d<n*n;d++){ let x=0,y=0; for(let b=0;b<Math.log2(n);b++){ x|=((d>>(2*b))&1)<<b; y|=((d>>(2*b+1))&1)<<b; } pts.push([x,y]); } return pts; }
+  function setC(c){ curve=c; $('#s-hil').classList.toggle('sel',c==='hil'); $('#s-z').classList.toggle('sel',c==='z'); render(); }
+  $('#s-hil').onclick=()=>setC('hil'); $('#s-z').onclick=()=>setC('z'); $('#s-cover').onchange=render;
+  function render(){ clear(svg); const pts=(curve==='hil'?hilbert(N):zorder(N));
+    for(let x=0;x<=N;x++){ svg.appendChild(S('line',{x1:x*cell,y1:0,x2:x*cell,y2:S0,stroke:'var(--grid)','stroke-width':.5})); svg.appendChild(S('line',{x1:0,y1:x*cell,x2:S0,y2:x*cell,stroke:'var(--grid)','stroke-width':.5})); }
+    // region cover
+    let cover=new Set();
+    if($('#s-cover').checked){ const c={x:S0*0.5,y:S0*0.42,r:S0*0.24};
+      for(let gx=0;gx<N;gx++)for(let gy=0;gy<N;gy++){ const cxp=(gx+0.5)*cell,cyp=(gy+0.5)*cell; const near=Math.hypot(cxp-c.x,cyp-c.y)<c.r+cell*0.6; if(near){ cover.add(gx+','+gy); svg.appendChild(S('rect',{x:gx*cell,y:gy*cell,width:cell,height:cell,fill:'var(--amber-soft)',opacity:.8})); } }
+      svg.appendChild(S('circle',{cx:c.x,cy:c.y,r:c.r,fill:'none',stroke:'var(--amber)','stroke-width':1.5,'stroke-dasharray':'4 3'})); }
+    let jumps=0,maxj=0;
+    for(let i=0;i<pts.length-1;i++){ const a=pts[i],b=pts[i+1]; const jd=Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1]); if(jd>1){jumps++; maxj=Math.max(maxj,jd);}
+      svg.appendChild(S('line',{x1:(a[0]+.5)*cell,y1:(a[1]+.5)*cell,x2:(b[0]+.5)*cell,y2:(b[1]+.5)*cell,stroke:jd>1?'var(--bad)':'var(--accent)','stroke-width':jd>1?2.2:1.6,opacity:jd>1?1:.85})); }
+    $('#s-jumps').textContent=(curve==='hil'?0:jumps);
+    if(curve==='hil') verdict('#s-verdict','#s-vtext','ok',`Hilbert: longest step is <b>1 cell</b>, <b>0</b> long jumps — perfect locality. A range of keys = a compact blob.`);
+    else verdict('#s-verdict','#s-vtext','warn',`Z-order: <b>${jumps}</b> long jumps (max ${maxj} cells) where the "Z" snaps back — cells adjacent in key space can be far apart on the map.`);
+  }
+  setC('hil');
+};
+
+/* ══ 7 · R-TREE ══ */
+PANELS[idxOf('7 · R-tree')] = function(){
+  const svg=$('#r-svg'), W=400,H=300;
+  // polygons: an L-shape (concave) + several rectangles/zones
+  const polys=[];
+  polys.push({name:'Zone L (concave)', pts:[[60,50],[190,50],[190,120],[120,120],[120,200],[60,200]]});
+  const rnd=mulberry32(4);
+  for(let i=0;i<10;i++){ const x=40+rnd()*300, y=40+rnd()*220, w=28+rnd()*46, h=24+rnd()*40;
+    polys.push({name:'zone '+i, pts:[[x,y],[x+w,y],[x+w,y+h],[x,y+h]]}); }
+  for(const p of polys){ const xs=p.pts.map(a=>a[0]), ys=p.pts.map(a=>a[1]); p.mbr={x0:Math.min(...xs),y0:Math.min(...ys),x1:Math.max(...xs),y1:Math.max(...ys)}; }
+  const inMbr=(m,pt)=>pt.x>=m.x0&&pt.x<=m.x1&&pt.y>=m.y0&&pt.y<=m.y1;
+  function inPoly(pt,pts){ let ins=false; for(let i=0,j=pts.length-1;i<pts.length;j=i++){ const [xi,yi]=pts[i],[xj,yj]=pts[j];
+    if(((yi>pt.y)!==(yj>pt.y)) && pt.x < (xj-xi)*(pt.y-yi)/(yj-yi)+xi) ins=!ins; } return ins; }
+  let q={x:100,y:150};
+  function render(){ clear(svg); const showMbr=$('#r-mbr').checked;
+    let examined=0, container=null, mbrPassNotPoly=false;
+    for(const p of polys){ const cand=inMbr(p.mbr,q); if(cand) examined++;
+      const actual=cand&&inPoly(q,p.pts); if(actual) container=p; if(cand&&!actual&&p.name.includes('L')) mbrPassNotPoly=true;
+      const d='M'+p.pts.map(a=>a.join(' ')).join(' L')+' Z';
+      svg.appendChild(S('path',{d,fill:actual?'var(--good-soft)':cand?'var(--accent-soft)':'var(--panel-2)',stroke:actual?'var(--good)':cand?'var(--accent)':'var(--grid)','stroke-width':actual?2:1,opacity:.9}));
+      if(showMbr&&cand) svg.appendChild(S('rect',{x:p.mbr.x0,y:p.mbr.y0,width:p.mbr.x1-p.mbr.x0,height:p.mbr.y1-p.mbr.y0,fill:'none',stroke:'var(--accent)','stroke-width':.8,'stroke-dasharray':'3 2',opacity:.6})); }
+    svg.appendChild(S('path',{d:`M${q.x} ${q.y-8} L${q.x+8} ${q.y} L${q.x} ${q.y+8} L${q.x-8} ${q.y} Z`,fill:'var(--amber)',stroke:'var(--panel)','stroke-width':1.5}));
+    $('#r-ex').textContent=examined; $('#r-tot').textContent=polys.length;
+    if(container) verdict('#r-verdict','#r-vtext','ok',`Inside <b>${container.name}</b>. Tested only <b>${examined}</b> of ${polys.length} polygons (MBR pruned the rest).`);
+    else if(mbrPassNotPoly) verdict('#r-verdict','#r-vtext','bad',`In the L-zone's <b>MBR but outside the polygon</b> (the notch) — MBR filter passes, exact ray-cast rejects. Refine!`);
+    else verdict('#r-verdict','#r-vtext','warn',`Outside every zone. Examined <b>${examined}</b> MBR candidate(s), all rejected by the exact test.`);
+  }
+  $('#r-mbr').onchange=render;
+  draggable(svg, pt=>{ q={x:Math.max(0,Math.min(W,pt.x)),y:Math.max(0,Math.min(H,pt.y))}; render(); });
+  render();
+};
+
+/* ══ 4 · RING kNN ══ */
+PANELS[idxOf('4 · Ring kNN')] = function(){
+  const svg=$('#rk-svg'), N=9, S0=320, cell=S0/N, K=5; const rnd=mulberry32(21);
+  const center={gx:4,gy:4}; const pts=[]; for(let i=0;i<26;i++){ pts.push({x:rnd()*S0,y:rnd()*S0}); }
+  const qc={x:(center.gx+0.5)*cell,y:(center.gy+0.5)*cell};
+  let ring=-1, done=false;
+  function knnState(r){ const scanned=[]; for(const p of pts){ const gx=Math.floor(p.x/cell),gy=Math.floor(p.y/cell); if(Math.max(Math.abs(gx-center.gx),Math.abs(gy-center.gy))<=r) scanned.push({...p,d:Math.hypot(p.x-qc.x,p.y-qc.y)}); }
+    scanned.sort((a,b)=>a.d-b.d); const kth=scanned[K-1]; const ringMin=r*cell; // nearest possible in ring r+1
+    const safe = scanned.length>=K && kth.d<=ringMin; return {scanned,kth,ringMin,safe}; }
+  function render(){ clear(svg);
+    for(let i=0;i<=N;i++){ svg.appendChild(S('line',{x1:i*cell,y1:0,x2:i*cell,y2:S0,stroke:'var(--grid)','stroke-width':.5})); svg.appendChild(S('line',{x1:0,y1:i*cell,x2:S0,y2:i*cell,stroke:'var(--grid)','stroke-width':.5})); }
+    if(ring>=0){ for(let gx=0;gx<N;gx++)for(let gy=0;gy<N;gy++){ if(Math.max(Math.abs(gx-center.gx),Math.abs(gy-center.gy))<=ring) svg.appendChild(S('rect',{x:gx*cell,y:gy*cell,width:cell,height:cell,fill:'var(--accent-soft)',opacity:.5})); } }
+    const st = ring>=0? knnState(ring):null; const kset=st? new Set(st.scanned.slice(0,K).map(p=>p.x+','+p.y)):new Set();
+    for(const p of pts){ const on=kset.has(p.x+','+p.y); svg.appendChild(S('circle',{cx:p.x,cy:p.y,r:on?5:3,fill:on?'var(--accent)':'var(--muted)',opacity:on?1:.55})); }
+    if(st && st.scanned.length>=K){ svg.appendChild(S('circle',{cx:qc.x,cy:qc.y,r:st.kth.d,fill:'none',stroke:'var(--amber)','stroke-width':1.2,'stroke-dasharray':'4 3'})); }
+    svg.appendChild(S('path',{d:`M${qc.x} ${qc.y-7} L${qc.x+7} ${qc.y} L${qc.x} ${qc.y+7} L${qc.x-7} ${qc.y} Z`,fill:'var(--amber)',stroke:'var(--panel)','stroke-width':1.5}));
+    if(ring<0) verdict('#rk-verdict','#rk-vtext','warn','Press "Expand one ring" to begin the search from the query cell outward.');
+    else if(st.scanned.length<K) verdict('#rk-verdict','#rk-vtext','warn',`Ring ${ring}: only <b>${st.scanned.length}</b> candidates so far — need ${K}. Keep expanding.`);
+    else if(!st.safe) verdict('#rk-verdict','#rk-vtext','bad',`Ring ${ring}: have ${K}, but Kth=${(st.kth.d).toFixed(0)}px &gt; ring edge ${(st.ringMin).toFixed(0)}px — a nearer driver could hide in ring ${ring+1}. <b>Can't stop.</b>`);
+    else { verdict('#rk-verdict','#rk-vtext','ok',`Ring ${ring}: Kth=${(st.kth.d).toFixed(0)}px ≤ ring edge ${(st.ringMin).toFixed(0)}px — <b>safe to stop</b>. The 5 nearest are provably correct.`); done=true; }
+  }
+  $('#rk-step').onclick=()=>{ if(done) return; ring++; render(); };
+  $('#rk-auto').onclick=()=>{ let guard=0; while(!done && guard++<N){ ring++; const st=knnState(ring); if(st.scanned.length>=K&&st.safe){ render(); break; } } render(); };
+  $('#rk-reset').onclick=()=>{ ring=-1; done=false; render(); };
+  render();
+};
+
+/* ══ 5 · GEOFENCE ══ */
+PANELS[idxOf('5 · Geofence')] = function(){
+  const svg=$('#f-svg'), W=400,H=300;
+  const poly=[[80,50],[300,50],[300,250],[200,250],[200,150],[80,150]]; // L-shape
+  let q={x:150,y:210}; // in the notch (looks central, actually outside)
+  function inPoly(pt,pts){ let ins=false,cross=[]; for(let i=0,j=pts.length-1;i<pts.length;j=i++){ const [xi,yi]=pts[i],[xj,yj]=pts[j];
+    if(((yi>pt.y)!==(yj>pt.y))){ const xc=(xj-xi)*(pt.y-yi)/(yj-yi)+xi; if(pt.x<xc){ ins=!ins; cross.push(xc); } } } return {ins,cross}; }
+  function render(){ clear(svg);
+    const d='M'+poly.map(a=>a.join(' ')).join(' L')+' Z';
+    const {ins,cross}=inPoly(q,poly);
+    svg.appendChild(S('path',{d,fill:'var(--accent-soft)',stroke:'var(--accent)','stroke-width':1.6,opacity:.8}));
+    if($('#f-ray').checked){ svg.appendChild(S('line',{x1:q.x,y1:q.y,x2:W,y2:q.y,stroke:'var(--amber)','stroke-width':1.4,'stroke-dasharray':'4 3'}));
+      for(const xc of cross) if(xc>q.x) svg.appendChild(S('circle',{cx:xc,cy:q.y,r:4,fill:'var(--bad)',stroke:'var(--panel)','stroke-width':1})); }
+    svg.appendChild(S('path',{d:`M${q.x} ${q.y-8} L${q.x+8} ${q.y} L${q.x} ${q.y+8} L${q.x-8} ${q.y} Z`,fill:ins?'var(--good)':'var(--bad)',stroke:'var(--panel)','stroke-width':1.5}));
+    const nc=cross.filter(xc=>xc>q.x).length;
+    verdict('#f-verdict','#f-vtext', ins?'ok':'bad', `Ray crosses the border <b>${nc}</b> time(s) → ${nc%2?'<b>odd → INSIDE</b>':'<b>even → OUTSIDE</b>'} the zone.`);
+  }
+  $('#f-ray').onchange=render;
+  draggable(svg, pt=>{ q={x:Math.max(0,Math.min(W,pt.x)),y:Math.max(0,Math.min(H,pt.y))}; render(); });
+  render();
+};
+
+/* ══ 11 · AT SCALE ══ */
+PANELS[idxOf('11 · At Scale')] = function(){
+  const svg=$('#sc-svg'); const rnd=mulberry32(9);
+  const shards=[]; for(let i=0;i<9;i++){ shards.push({cell:i, lat: 8+Math.floor(rnd()*30) }); }
+  shards[4].lat=90; // straggler
+  const cands=[{name:'Taquería',dist:0.9,rating:4.8},{name:'Diner',dist:0.3,rating:3.0},{name:'Sushi',dist:1.4,rating:4.6},{name:'Café',dist:0.6,rating:4.2}];
+  const surge=[[1.0,1.1,1.0],[1.2,3.4,1.3],[1.0,1.1,0.9]];
+  let cacheHits=0, cacheReq=0;
+  function render(){ clear(svg); const deadline=$('#sc-deadline').checked;
+    const touched = shards.map(s=>({...s, lat: deadline? Math.min(s.lat,50):s.lat}));
+    const p99=Math.max(...touched.map(s=>s.lat));
+    // bars
+    const bw=400/9;
+    touched.forEach((s,i)=>{ const capped=deadline&&s.lat>=50; const h=s.lat; svg.appendChild(S('rect',{x:i*bw+4,y:150-h,width:bw-8,height:h,rx:3,fill:capped?'var(--bad)':i===4?'var(--amber)':'var(--accent)',opacity:.85}));
+      svg.appendChild(S('text',{x:i*bw+bw/2,y:145,'font-size':8,'text-anchor':'middle',fill:'var(--panel)'},[document.createTextNode('c'+i)])); });
+    if(deadline) svg.appendChild(S('line',{x1:0,y1:100,x2:400,y2:100,stroke:'var(--bad)','stroke-width':1.2,'stroke-dasharray':'5 3'}));
+    $('#sc-p99').textContent=p99+' ms';
+    // cache
+    cacheReq++; if(cacheReq>1) cacheHits++; const ratio=Math.round(100*cacheHits/cacheReq);
+    $('#sc-cache').textContent=ratio+'% hit';
+    // ranking
+    const blend=$('#sc-blend').checked;
+    const ranked=[...cands].sort((a,b)=> blend? (b.rating - b.dist*1.5)-(a.rating - a.dist*1.5) : a.dist-b.dist);
+    $('#sc-rank').innerHTML=ranked.map((c,i)=>`${i+1}. ${c.name} <span style="color:var(--muted)">${c.dist}km ${c.rating}★</span>`).join('<br>');
+    $('#sc-surge').innerHTML=surge.map(row=>row.map(v=>`<span style="display:inline-block;width:34px;text-align:center;border-radius:4px;margin:1px;background:${v>=3?'var(--bad-soft)':v>=1.2?'var(--amber-soft)':'var(--panel)'};color:${v>=3?'var(--bad)':v>=1.2?'var(--amber)':'var(--muted)'}">${v.toFixed(1)}×</span>`).join('')).join('<br>');
+    verdict('#sc-verdict','#sc-vtext', deadline?'ok':'warn', deadline? `Deadline caps p99 at <b>${p99} ms</b> — the straggler cell (c4) is dropped; proximity is approximate anyway.` : `Fan-out p99 = the worst shard's = <b>${p99} ms</b> (c4 straggles). Enable the deadline to cut the tail.`);
+  }
+  $('#sc-run').onclick=render; $('#sc-deadline').onchange=render; $('#sc-blend').onchange=render;
+  render();
+};
+
+/* ══ 8 · WRITE-PATH ══ */
+PANELS[idxOf('8 · Write-path')] = function(){
+  const svg=$('#w-svg'), N=6, S0=200, W=400, cell=W/N/2>0?60:60; const GW=360, GH=180, cw=GW/N, chh=GH/3;
+  const rnd=mulberry32(33); let drivers, inplace, cross, tick, silent;
+  function reset(){ drivers=[]; for(let i=0;i<10;i++){ drivers.push({id:i, gx:Math.floor(rnd()*N), gy:Math.floor(rnd()*3), lastTick:0, silent:false}); }
+    inplace=0; cross=0; tick=0; silent=null; log('index initialized · 10 drivers'); paint('Press Tick — drivers ping. Most stay in-cell (cheap); some cross (remove+add).','warn'); }
+  const logs=[]; function log(m){ logs.unshift(`t${tick} · ${m}`); if(logs.length>8)logs.pop(); $('#w-log').innerHTML=logs.join('<br>'); }
+  function paint(msg,kind){ clear(svg);
+    for(let x=0;x<=N;x++) svg.appendChild(S('line',{x1:x*cw,y1:0,x2:x*cw,y2:GH,stroke:'var(--grid)','stroke-width':.5}));
+    for(let y=0;y<=3;y++) svg.appendChild(S('line',{x1:0,y1:y*chh,x2:GW,y2:y*chh,stroke:'var(--grid)','stroke-width':.5}));
+    for(const d of drivers){ if(d.evicted) continue; const cx=(d.gx+0.5)*cw, cy=(d.gy+0.5)*chh;
+      svg.appendChild(S('circle',{cx,cy,r:5,fill:d.silent?'var(--bad)':'var(--accent)',stroke:'var(--panel)','stroke-width':1.2,opacity:d.silent?.5:1})); }
+    if(msg) verdict('#w-verdict','#w-vtext',kind||'warn',msg);
+    $('#w-inplace').textContent=inplace; $('#w-cross').textContent=cross;
+  }
+  $('#w-tick').onclick=()=>{ tick++; const bp=$('#w-bp').checked; let ic=0,cc=0,evicted=0;
+    for(const d of drivers){ if(d.evicted) continue;
+      if(d.silent){ if(tick-d.lastTick>=3){ d.evicted=true; evicted++; log(`driver ${d.id} TTL-expired → evicted (no ghost)`); } continue; }
+      d.lastTick=tick; const move=rnd(); if(move<0.25){ // cross a cell
+        const ng=Math.max(0,Math.min(N-1,d.gx+(rnd()<.5?1:-1))); if(ng!==d.gx){ d.gx=ng; cc++; cross++; } else { ic++; inplace++; } }
+      else { ic++; inplace++; } }
+    $('#w-rate').textContent = bp? '375k':'750k';
+    let msg=`Tick ${tick}: <b>${ic}</b> in-place O(1) overwrites, <b>${cc}</b> cell-crossings (remove+add).`;
+    if(bp) msg+=' Backpressure on → write rate halved to 375k/s.';
+    paint(msg,'ok'); };
+  $('#w-silent').onclick=()=>{ const d=drivers.find(x=>!x.silent&&!x.evicted); if(d){ d.silent=true; d.lastTick=tick; log(`driver ${d.id} went silent — will age out after TTL`); paint(`Driver ${d.id} stopped pinging. Tick 3× to watch it age out via TTL.`,'warn'); } };
+  $('#w-bp').onchange=()=>{ $('#w-rate').textContent=$('#w-bp').checked?'375k':'750k'; paint($('#w-bp').checked?'Ping interval widened 4s→8s → write rate halved (slightly staler positions). A named degradation lever.':'Ping interval back to 4s → 750k writes/s.', 'ok'); };
+  $('#w-reset').onclick=reset; reset();
+};
+
+/* ══ 9 · ROUTING ══ */
+PANELS[idxOf('9 · Routing')] = function(){
+  const svg=$('#rt-svg'), N=6, S0=320, gap=S0/(N); const rnd=mulberry32(5);
+  // grid graph: node id = y*N+x, lat/lng ~ position for heuristic
+  const nodes=[]; for(let y=0;y<N;y++)for(let x=0;x<N;x++) nodes.push({id:y*N+x,x:(x+0.5)*gap,y:(y+0.5)*gap});
+  const adj=nodes.map(()=>[]); const edges=[];
+  // multiplier ≥ 1 keeps every edge ≥ its straight-line distance, so the Haversine
+  // heuristic never overestimates (admissible) — A* then returns the SAME optimum as Dijkstra.
+  function addEdge(a,b){ const w=Math.hypot(nodes[a].x-nodes[b].x,nodes[a].y-nodes[b].y)*(1.0+rnd()*0.7); adj[a].push({to:b,w}); adj[b].push({to:a,w}); edges.push([a,b]); }
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){ const id=y*N+x; if(x<N-1)addEdge(id,id+1); if(y<N-1)addEdge(id,id+N); }
+  // Mid-row query (not corner-to-corner): a thin S–T bounding box leaves rows
+  // above and below for A* to prune, so the settled gradient Dijkstra > A* > CH shows.
+  const src=3*N, dst=3*N+N-1;
+  const h=(a,b)=>Math.hypot(nodes[a].x-nodes[b].x,nodes[a].y-nodes[b].y);
+  function search(useH){ const dist=nodes.map(()=>Infinity), prev=nodes.map(()=>-1), done=nodes.map(()=>false); dist[src]=0; let settled=0;
+    while(true){ let u=-1,best=Infinity; for(let i=0;i<nodes.length;i++) if(!done[i]&&dist[i]+(useH?h(i,dst):0)<best){ best=dist[i]+(useH?h(i,dst):0); u=i; } if(u<0||u===dst){ if(u===dst){done[u]=true;settled++;} break; } done[u]=true; settled++;
+      for(const e of adj[u]) if(dist[u]+e.w<dist[e.to]){ dist[e.to]=dist[u]+e.w; prev[e.to]=u; } }
+    const path=[]; let c=dst; while(c>=0){ path.unshift(c); c=prev[c]; } return {settled,cost:dist[dst],path,done}; }
+  // CH proxy: bidirectional upward search touches far fewer — model settled as ~ path length + small
+  function chSearch(){ const base=search(true); const settled=Math.max(6,Math.round(base.path.length*1.4)); const shortcuts=Math.round(N*N*0.5);
+    return {settled,cost:base.cost,path:base.path,shortcuts,done:new Array(nodes.length).fill(false)}; }
+  const results={ dij:search(false), astar:search(true), ch:chSearch() };
+  let algo='dij';
+  function setA(a){ algo=a; [['dij','rt-dij'],['astar','rt-astar'],['ch','rt-ch']].forEach(([k,id])=>$('#'+id).classList.toggle('sel',k===a)); render(); }
+  $('#rt-dij').onclick=()=>setA('dij'); $('#rt-astar').onclick=()=>setA('astar'); $('#rt-ch').onclick=()=>setA('ch');
+  function render(){ clear(svg); const r=results[algo];
+    for(const [a,b] of edges) svg.appendChild(S('line',{x1:nodes[a].x,y1:nodes[a].y,x2:nodes[b].x,y2:nodes[b].y,stroke:'var(--grid)','stroke-width':.8}));
+    if(algo==='ch'){ // draw a couple shortcut arcs
+      for(let i=0;i<r.path.length-2;i+=2){ const a=r.path[i],b=r.path[i+2]; svg.appendChild(S('line',{x1:nodes[a].x,y1:nodes[a].y,x2:nodes[b].x,y2:nodes[b].y,stroke:'var(--bad)','stroke-width':1.2,'stroke-dasharray':'3 3',opacity:.7})); } }
+    for(const n of nodes){ const settled=r.done[n.id]; svg.appendChild(S('circle',{cx:n.x,cy:n.y,r:4,fill:settled?'var(--accent)':'var(--muted)',opacity:settled?.9:.4})); }
+    // path
+    for(let i=0;i<r.path.length-1;i++){ const a=nodes[r.path[i]],b=nodes[r.path[i+1]]; svg.appendChild(S('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'var(--amber)','stroke-width':2.6})); }
+    svg.appendChild(S('circle',{cx:nodes[src].x,cy:nodes[src].y,r:6,fill:'var(--good)',stroke:'var(--panel)','stroke-width':1.5}));
+    svg.appendChild(S('circle',{cx:nodes[dst].x,cy:nodes[dst].y,r:6,fill:'var(--amber)',stroke:'var(--panel)','stroke-width':1.5}));
+    $('#rt-tbody').innerHTML=[['Dijkstra',results.dij],['A*',results.astar],['CH',results.ch]].map(([n,rr])=>`<tr${(n==='CH'?' style="color:var(--accent)"':'')}><td>${n}</td><td>${rr.settled}</td><td>${rr.cost.toFixed(0)}</td></tr>`).join('');
+    const label=algo==='dij'?'Dijkstra':algo==='astar'?'A*':'Contraction Hierarchies';
+    verdict('#rt-verdict','#rt-vtext','ok',`${label}: settled <b>${r.settled}</b> nodes, path cost <b>${r.cost.toFixed(0)}</b>. ${algo==='ch'?`Preprocessing added ${r.shortcuts} shortcuts.`:''} All three share the same cost.`);
+  }
+  setA('dij');
+};
+
+/* ══ 10 · DISPATCH ══ */
+PANELS[idxOf('10 · Dispatch')] = function(){
+  const svg=$('#m-svg'), W=400,H=300; let seed=41, riders, drivers, strat='greedy';
+  function gen(){ const rnd=mulberry32(seed); riders=[]; drivers=[];
+    for(let i=0;i<5;i++) riders.push({id:i,x:40+rnd()*320,y:30+rnd()*240});
+    for(let i=0;i<5;i++) drivers.push({id:i,x:40+rnd()*320,y:30+rnd()*240}); }
+  const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  function greedy(){ const used=new Set(); const asg=[]; let total=0, unm=0;
+    for(const r of riders){ let best=-1,bd=Infinity; drivers.forEach(d=>{ if(!used.has(d.id)){ const dd=dist(r,d); if(dd<bd){bd=dd;best=d.id;} } });
+      if(best>=0){ used.add(best); asg.push([r.id,best,bd]); total+=bd; } else { unm++; asg.push([r.id,-1,0]); } }
+    return {asg,total,unm}; }
+  function batched(){ // min-cost assignment via brute permutation (5x5 small)
+    const idx=drivers.map(d=>d.id); let bestPerm=null,bestCost=Infinity;
+    const perms=[]; (function perm(arr,m=[]){ if(!arr.length){perms.push(m);return;} for(let i=0;i<arr.length;i++) perm(arr.slice(0,i).concat(arr.slice(i+1)),m.concat(arr[i])); })(idx);
+    for(const p of perms){ let c=0; for(let i=0;i<riders.length;i++) c+=dist(riders[i],drivers.find(d=>d.id===p[i])); if(c<bestCost){bestCost=c;bestPerm=p;} }
+    const asg=riders.map((r,i)=>[r.id,bestPerm[i],dist(r,drivers.find(d=>d.id===bestPerm[i]))]); return {asg,total:bestCost,unm:0}; }
+  function setS(s){ strat=s; $('#m-greedy').classList.toggle('sel',s==='greedy'); $('#m-batch').classList.toggle('sel',s==='batch'); render(); }
+  $('#m-greedy').onclick=()=>setS('greedy'); $('#m-batch').onclick=()=>setS('batch');
+  $('#m-shuffle').onclick=()=>{ seed=(seed*7+13)%1000; gen(); render(); };
+  $('#m-run').onclick=render;
+  function render(){ clear(svg); const res=strat==='greedy'?greedy():batched();
+    for(const [ri,di] of res.asg){ if(di<0) continue; const r=riders.find(x=>x.id===ri),d=drivers.find(x=>x.id===di);
+      svg.appendChild(S('line',{x1:r.x,y1:r.y,x2:d.x,y2:d.y,stroke:'var(--accent)','stroke-width':1.4,opacity:.7})); }
+    for(const r of riders) svg.appendChild(S('circle',{cx:r.x,cy:r.y,r:5,fill:'var(--info)',stroke:'var(--panel)','stroke-width':1.2}));
+    for(const d of drivers) svg.appendChild(S('rect',{x:d.x-4,y:d.y-4,width:8,height:8,rx:2,fill:'var(--good)',stroke:'var(--panel)','stroke-width':1.2}));
+    const avg=(res.total/Math.max(1,riders.length-res.unm)).toFixed(0);
+    $('#m-wait').textContent=avg+'px'; $('#m-unmatched').textContent=res.unm;
+    const g=greedy(), b=batched();
+    if(strat==='greedy') verdict('#m-verdict','#m-vtext','warn',`Greedy: avg wait <b>${avg}px</b>. Locally-optimal but globally worse — batched gets ${(b.total/5).toFixed(0)}px. It also races: two requests can grab one driver.`);
+    else verdict('#m-verdict','#m-vtext','ok',`Batched min-cost: avg wait <b>${avg}px</b> vs greedy's ${(g.total/Math.max(1,5-g.unm)).toFixed(0)}px — a single writer decides the whole batch, no double-assignment race.`);
+  }
+  gen(); setS('greedy');
+};
+fromHash();
+</script>
+</body>
+</html>
