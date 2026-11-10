@@ -20,10 +20,10 @@ This repo pairs with **Core Course / 29-geospatial-systems.md**. Study loop: run
 
 ## Go deeper
 
-- **Deep Dives/01-redis.md** — the `GEOADD`/`GEOSEARCH` commands are geohash-in-a-sorted-set under the hood; see why "geohash + Redis" is the boring-correct default.
-- **Core Course/16-pattern-scaling-reads.md** — hot cells are hot keys: the replicate/sub-shard/cache-short-TTL playbook from Phase 11 is the general read-scaling pattern.
-- **Core Course/31-design-matching-engine.md** — Phase 10's batched matching and atomic claim, generalized: matching as an optimization problem with a single-writer commit.
-- **Core Course/18c-design-marketplace-money.md** — what rides on top of dispatch: the trip state machine's `Completed → Paid` saga, the ledger, and the strong/eventual boundary.
-- **Core Course/07-search.md** — Phase 11's retrieve→rank two-stage pattern is the same shape as search and ads: cheap wide retrieval, expensive narrow ranking.
-- **Core Course/09-realtime-systems.md** — the WebSocket gateway tier that carries Phase 8's ping firehose from millions of drivers.
+- **[Deep Dives/01-redis.md](https://github.com/swapnull-in/system-design/blob/main/Deep%20Dives/01-redis.md)** — the `GEOADD`/`GEOSEARCH` commands are geohash-in-a-sorted-set under the hood; see why "geohash + Redis" is the boring-correct default.
+- **[Deep Dives/16-pattern-scaling-reads.md](https://github.com/swapnull-in/system-design/blob/main/Deep%20Dives/16-pattern-scaling-reads.md)** — hot cells are hot keys: the replicate/sub-shard/cache-short-TTL playbook from Phase 11 is the general read-scaling pattern.
+- **[Core Course/31-design-matching-engine.md](https://github.com/swapnull-in/system-design/blob/main/Core%20Course/31-design-matching-engine.md)** — Phase 10's batched matching and atomic claim, generalized: matching as an optimization problem with a single-writer commit.
+- **[Core Course/18c-design-marketplace-money.md](https://github.com/swapnull-in/system-design/blob/main/Core%20Course/18c-design-marketplace-money.md)** — what rides on top of dispatch: the trip state machine's `Completed → Paid` saga, the ledger, and the strong/eventual boundary.
+- **[Core Course/07-search.md](https://github.com/swapnull-in/system-design/blob/main/Core%20Course/07-search.md)** — Phase 11's retrieve→rank two-stage pattern is the same shape as search and ads: cheap wide retrieval, expensive narrow ranking.
+- **[Core Course/09-realtime-systems.md](https://github.com/swapnull-in/system-design/blob/main/Core%20Course/09-realtime-systems.md)** — the WebSocket gateway tier that carries Phase 8's ping firehose from millions of drivers.
 
